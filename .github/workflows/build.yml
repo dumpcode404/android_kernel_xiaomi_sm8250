@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison flex libssl-dev libelf-dev \
-            ccache cpio zip python3 curl
+            ccache cpio zip python3 curl git
 
       - name: Setup Neutron clang
         run: |
@@ -38,6 +38,53 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CLANG_TRIPLE=aarch64-linux-gnu- 2>&1 | tee build.log
 
+      - name: Package AnyKernel3
+        run: |
+          B=out/arch/arm64/boot
+          Q=$B/dts/vendor/qcom
+
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 ak3
+          git clone --depth=1 https://android.googlesource.com/platform/system/libufdt libufdt
+
+          # dtbo.img dari overlay munch
+          python3 libufdt/utils/src/mkdtboimg.py create ak3/dtbo.img --page_size=4096 $Q/munch-*.dtbo
+
+          # dtb gabungan
+          cat $Q/kona.dtb $Q/kona-v2.dtb $Q/kona-v2.1.dtb > ak3/dtb
+          cp $B/Image ak3/Image
+
+          cat > ak3/anykernel.sh << 'AKEOF'
+          ### AnyKernel3 Ramdisk Mod Script
+          properties() { '
+          kernel.string=Custom Kernel for POCO F4 (munch)
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=munch
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          BLOCK=boot;
+          IS_SLOT_DEVICE=auto;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          . tools/ak3-core.sh;
+
+          dump_boot;
+          write_boot;
+
+          flash_generic dtbo;
+          AKEOF
+
+          cd ak3
+          rm -rf .git README.md
+          zip -r9 ../Munch-Kernel-$(date +%Y%m%d-%H%M).zip . -x '*.git*'
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -46,6 +93,4 @@ jobs:
           if-no-files-found: warn
           path: |
             build.log
-            out/arch/arm64/boot/Image*
-            out/arch/arm64/boot/dtbo.img
-            out/arch/arm64/boot/dts/vendor/qcom/*.dtb
+            Munch-Kernel-*.zip
