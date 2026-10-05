@@ -1,0 +1,51 @@
+name: Kernel Build (Munch)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'arch/arm64/configs/vendor/munch_defconfig'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libssl-dev libelf-dev \
+            ccache cpio zip python3 curl
+
+      - name: Setup Neutron clang
+        run: |
+          mkdir -p $HOME/neutron && cd $HOME/neutron
+          bash <(curl -s https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman) -S
+          echo "$HOME/neutron/bin" >> $GITHUB_PATH
+
+      - name: Generate defconfig
+        run: make O=out ARCH=arm64 vendor/munch_defconfig
+
+      - name: Build
+        run: |
+          make -j$(nproc) O=out ARCH=arm64 \
+            CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
+            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CLANG_TRIPLE=aarch64-linux-gnu- 2>&1 | tee build.log
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: munch-kernel
+          if-no-files-found: warn
+          path: |
+            build.log
+            out/arch/arm64/boot/Image*
+            out/arch/arm64/boot/dtbo.img
+            out/arch/arm64/boot/dts/vendor/qcom/*.dtb
