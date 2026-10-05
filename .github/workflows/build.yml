@@ -26,7 +26,6 @@ jobs:
           bash <(curl -s https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman) -S
           echo "$HOME/neutron/bin" >> $GITHUB_PATH
       - name: Setup KernelSU
-        working-directory: kernel
         run: |
           echo "=== Setup KernelSU ==="
 
