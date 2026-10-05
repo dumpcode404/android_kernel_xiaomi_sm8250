@@ -25,7 +25,16 @@ jobs:
           mkdir -p $HOME/neutron && cd $HOME/neutron
           bash <(curl -s https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman) -S
           echo "$HOME/neutron/bin" >> $GITHUB_PATH
+      - name: Setup KernelSU
+        working-directory: kernel
+        run: |
+          echo "=== Setup KernelSU ==="
 
+          curl -LSs https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh | bash -
+
+          echo "=== Verify KernelSU ==="
+          grep -R "KernelSU" -n drivers 2>/dev/null | head || true
+  
       - name: Generate defconfig
         run: make O=out ARCH=arm64 vendor/munch_defconfig
 
